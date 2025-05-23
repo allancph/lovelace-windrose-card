@@ -1,52 +1,74 @@
-import { LitElement, html } from 'lit';
-import { parseForecast, JsonWindForecast } from './util/JsonWindForecastImporter';
+import { LitElement, html, css } from "lit";
+import { property, customElement } from "lit/decorators.js";
+import { parseForecast, JsonWindForecast } from "../util/JsonWindForecastImporter";
 
-class WindroseCard extends LitElement {
-  static properties = {
-    forecast: { type: Array },
-  };
+@customElement("windrose-card")
+export class WindRoseCard extends LitElement {
+  @property({ attribute: false }) public hass: any;
+  @property({ attribute: false }) public config: any;
+  @property({ type: Array }) forecast: Array<{ datetime: string; direction: number; speed: number }> = [];
 
-  constructor() {
-    super();
-    this.forecast = [];
+  static styles = css`
+    :host {
+      display: block;
+      padding: 16px;
+    }
+    .error {
+      color: red;
+      font-weight: bold;
+    }
+  `;
+
+  setConfig(config: any): void {
+    this.config = config;
+    this._processForecast();
   }
 
-  setConfig(config) {
-    // Automatically parse forecast if included in config
-    if (config.wind_forecast) {
-      this.parseAndSetForecast(config.wind_forecast);
+  set hassInstance(hass: any) {
+    this.hass = hass;
+    this._processForecast();
+  }
+
+  updated(changedProps: Map<string, any>) {
+    if (changedProps.has("hass") || changedProps.has("config")) {
+      this._processForecast();
     }
   }
 
-  // Example: If fetching data from an entity
-  set hass(hass) {
-    const entity = hass.states['sensor.wind_forecast'];
-    if (entity && entity.attributes && entity.attributes.forecast_json) {
-      this.parseAndSetForecast(JSON.parse(entity.attributes.forecast_json));
-    }
-  }
-
-  parseAndSetForecast(json) {
+  private _processForecast() {
     try {
-      this.forecast = parseForecast(json);
-    } catch (e) {
-      console.error('Failed to parse wind forecast', e);
+      if (this.config && this.config.entity && this.hass) {
+        const entity = this.hass.states[this.config.entity];
+        if (entity && entity.attributes && entity.attributes.forecast_json) {
+          const json: JsonWindForecast = JSON.parse(entity.attributes.forecast_json);
+          this.forecast = parseForecast(json);
+          return;
+        }
+      }
+      // fallback: config may have a field with direct forecast JSON
+      if (this.config && this.config.wind_forecast) {
+        this.forecast = parseForecast(this.config.wind_forecast);
+        return;
+      }
       this.forecast = [];
+    } catch (e) {
+      this.forecast = [];
+      console.error("Failed to parse wind forecast", e);
     }
   }
 
   render() {
     return html`
-      <div>
-        ${this.forecast.length === 0
-          ? html`<div>No forecast data</div>`
-          : this.forecast.map(f => html`
-              <div>${f.datetime}: ${f.direction}° @ ${f.speed} m/s</div>
-            `)
-        }
-      </div>
+      <ha-card header="Wind Rose">
+        <div>
+          ${this.forecast.length === 0
+            ? html`<div>No forecast data</div>`
+            : this.forecast.map(
+                (f) =>
+                  html`<div>${f.datetime}: ${f.direction}° @ ${f.speed} m/s</div>`
+              )}
+        </div>
+      </ha-card>
     `;
   }
 }
-
-customElements.define('windrose-card', WindroseCard);

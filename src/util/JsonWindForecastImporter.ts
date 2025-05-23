@@ -14,11 +14,13 @@ export interface JsonWindForecast {
 }
 
 // Returns: Array of { datetime, direction, speed }
-export function parseForecast(json: JsonWindForecast) {
+export function parseForecast(json: JsonWindForecast): { datetime: string; direction: number; speed: number }[] {
   const dirMap = new Map(json.wind_direction.forecast.map(f => [f.datetime, f.value]));
-  return json.wind_speed.forecast.map(s => ({
-    datetime: s.datetime,
-    direction: dirMap.get(s.datetime),
-    speed: s.value
-  })).filter(item => item.direction !== undefined);
+  return json.wind_speed.forecast
+    .map(s => ({
+      datetime: s.datetime,
+      direction: dirMap.get(s.datetime),
+      speed: s.value
+    }))
+    .filter((item): item is { datetime: string; direction: number; speed: number } => item.direction !== undefined);
 }
